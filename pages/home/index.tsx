@@ -22,12 +22,21 @@ type Polygon = {
 	points2D: Point2D[];
 	points3D: Point3D[];
 };
+type Borehole = {
+	boreholeId: string;
+	name: string;
+	x: number;
+	elevation: number;
+	depth: number;
+	waterDepth: number | null;
+};
 
 // Types for Sections
 type Section = {
 	sectionId: string;
 	sectionName: string;
 	polygons: Polygon[];
+	boreholes: Borehole[]; // Add boreholes
 };
 
 type SampleData = {
@@ -55,7 +64,7 @@ const HomeList = () => {
 		if (!section) return;
 
 		const margin = { top: 20, right: 20, bottom: 40, left: 40 };
-		const width = 500 - margin.left - margin.right;
+		const width = 1000 - margin.left - margin.right;
 		const height = 500 - margin.top - margin.bottom;
 
 		const svg = d3
@@ -90,13 +99,51 @@ const HomeList = () => {
 				),
 			])
 			.range([height, 0]);
+		// Render boreholes
+		section.boreholes.forEach((borehole) => {
+			svg
+				.append("circle")
+				.attr("cx", xScale(borehole.x))
+				.attr("cy", yScale(borehole.elevation)) // Use elevation for y-coordinate
+				.attr("r", 5) // Size of the circle representing the borehole
+				.attr("fill", "red")
+				.on("click", function () {
+					d3.select(this).attr("fill", "blue"); // Change color on click
+				});
 
+			// Add label for the borehole
+			svg
+				.append("text")
+				.attr("x", xScale(borehole.x))
+				.attr("y", yScale(borehole.elevation) - 10) // Position text above the circle
+				.attr("text-anchor", "middle")
+				.text(borehole.name);
+		});
 		const xAxis = d3.axisBottom(xScale);
 		const yAxis = d3.axisLeft(yScale);
 
+		// Append x and y axis
 		svg.append("g").attr("transform", `translate(0, ${height})`).call(xAxis);
 		svg.append("g").call(yAxis);
 
+		// Add X-axis label
+		svg
+			.append("text")
+			.attr("x", width / 2)
+			.attr("y", height + margin.bottom - 10) // Position the text just below the x-axis
+			.style("text-anchor", "middle")
+			.text("X");
+
+		// Add Y-axis label
+		svg
+			.append("text")
+			.attr("transform", "rotate(-90)") // Rotate to make it vertical
+			.attr("x", -height / 2)
+			.attr("y", -margin.left + 15) // Position the text just left of the y-axis
+			.style("text-anchor", "middle")
+			.text("Y");
+
+		// Render polygons
 		section.polygons.forEach((polygon) => {
 			svg
 				.append("polygon")
@@ -126,15 +173,14 @@ const HomeList = () => {
 		scene.background = new THREE.Color(0xffffff); // White background
 
 		// Camera setup (Position it for a top-right-down view)
-		const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+		const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 5000);
 		camera.position.set(100, 100, 100); // Initial camera position
-		let [sideX, sideY, sideZ] = section.polygons[0].points3D[0].vertex;
-		console.log(sideX, sideY, sideZ);
+
 		camera.lookAt(0, 0, 0); // Look at the center
 
 		// Renderer setup
 		const renderer = new THREE.WebGLRenderer();
-		renderer.setSize(500, 500);
+		renderer.setSize(1000, 500);
 		threeRef.current.innerHTML = ""; // Clear previous content
 		threeRef.current.appendChild(renderer.domElement);
 
@@ -226,7 +272,7 @@ const HomeList = () => {
 			const indices: number[] = []; // Array to store face indices (triangles)
 
 			// Apply scaling factor to control the size of the objects
-			const scaleFactor = 0.05; // Adjust this factor as needed for proper scaling
+			const scaleFactor = 0.3; // Adjust this factor as needed for proper scaling
 
 			polygon.points3D.forEach((point) => {
 				const [x, y, z] = point.vertex;
@@ -256,6 +302,32 @@ const HomeList = () => {
 				color: `#${polygon.color}`,
 				side: THREE.DoubleSide, // Ensure both sides are rendered
 				wireframe: false, // Set to true if you want wireframe mode, false for solid fill
+			});
+
+			// Render boreholes
+			section.boreholes.forEach((borehole) => {
+				// Find the matching 3D point based on x coordinate of the borehole
+				const matchingPoint = section.polygons
+					.flatMap((polygon) => polygon.points3D) // Flatten the array of 3D points from all polygons
+					.find((point) => point.vertex[0] === borehole.x); // Find point where x matches the borehole
+
+				if (matchingPoint) {
+					// Create a sphere geometry to represent the borehole
+					const geometry = new THREE.SphereGeometry(2, 32, 32); // Size and detail of the sphere
+					const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Color of the sphere (Red)
+
+					const boreholeMesh = new THREE.Mesh(geometry, material);
+
+					// Set the position of the borehole in 3D space using the matching point's y and z coordinates
+					boreholeMesh.position.set(
+						matchingPoint.vertex[0],
+						borehole.depth,
+						matchingPoint.vertex[2]
+					);
+
+					// Add the borehole mesh to the scene
+					scene.add(boreholeMesh);
+				}
 			});
 
 			const mesh = new THREE.Mesh(geometry, material);
