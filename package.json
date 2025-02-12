@@ -60,11 +60,13 @@
     "youtube-transcript": "^1.2.1"
   },
   "devDependencies": {
+    "@types/d3": "^7.4.3",
     "@types/file-saver": "^2.0.7",
     "@types/html-docx-js": "^0.3.4",
     "@types/node": "^18.0.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
+    "@types/three": "^0.173.0",
     "@types/uuid": "^9.0.8",
     "@typescript-eslint/parser": "5.48.0",
     "cross-env": "^7.0.3",

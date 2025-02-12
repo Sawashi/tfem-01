@@ -48,7 +48,10 @@ const { Option } = Select;
 
 const HomeList = () => {
 	// State with types
-	const [data, setData] = useState<Section[]>(sampleData.polygonsBySection);
+	const [data, setData] = useState<Section[]>(
+		sampleData.polygonsBySection as unknown as Section[]
+	);
+
 	const [selectedSection, setSelectedSection] = useState<string>(
 		sampleData.polygonsBySection[0].sectionId
 	);
@@ -76,28 +79,19 @@ const HomeList = () => {
 			.append("g")
 			.attr("transform", `translate(${margin.left}, ${margin.top})`);
 
+		const allPoints = section.polygons.flatMap((p) => p.points2D);
+
+		const xValues = allPoints.map((d) => d.vertex[0]);
+		const yValues = allPoints.map((d) => d.vertex[1]);
+
 		const xScale = d3
 			.scaleLinear()
-			.domain([
-				d3.min(
-					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[0]))
-				),
-				d3.max(
-					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[0]))
-				),
-			])
+			.domain([d3.min(xValues) ?? 0, d3.max(xValues) ?? 0])
 			.range([0, width]);
 
 		const yScale = d3
 			.scaleLinear()
-			.domain([
-				d3.min(
-					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[1]))
-				),
-				d3.max(
-					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[1]))
-				),
-			])
+			.domain([d3.min(yValues) ?? 0, d3.max(yValues) ?? 0])
 			.range([height, 0]);
 		// Render boreholes
 		section.boreholes.forEach((borehole) => {
@@ -200,7 +194,7 @@ const HomeList = () => {
 		let moveRight = false;
 
 		// Keyboard event listeners for WASD keys
-		function handleKeyDown(event) {
+		function handleKeyDown(event: { key: any }) {
 			switch (event.key) {
 				case "w":
 					moveForward = true;
@@ -219,7 +213,7 @@ const HomeList = () => {
 			}
 		}
 
-		function handleKeyUp(event) {
+		function handleKeyUp(event: { key: any }) {
 			switch (event.key) {
 				case "w":
 					moveForward = false;
