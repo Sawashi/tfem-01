@@ -1,0 +1,293 @@
+import React, { useEffect, useRef, useState } from "react";
+import * as d3 from "d3";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { Select, Typography } from "antd";
+import sampleData from "../../sample_data.json";
+
+// Types for 2D and 3D Points
+type Point2D = {
+	vertex: [number, number];
+};
+
+type Point3D = {
+	vertex: [number, number, number];
+};
+
+// Types for Polygons
+type Polygon = {
+	symbol: string;
+	symbolDescription: string;
+	color: string;
+	points2D: Point2D[];
+	points3D: Point3D[];
+};
+
+// Types for Sections
+type Section = {
+	sectionId: string;
+	sectionName: string;
+	polygons: Polygon[];
+};
+
+type SampleData = {
+	polygonsBySection: Section[];
+};
+
+const { Title } = Typography;
+const { Option } = Select;
+
+const HomeList = () => {
+	// State with types
+	const [data, setData] = useState<Section[]>(sampleData.polygonsBySection);
+	const [selectedSection, setSelectedSection] = useState<string>(
+		sampleData.polygonsBySection[0].sectionId
+	);
+	const d3Ref = useRef<HTMLDivElement>(null);
+	const threeRef = useRef<HTMLDivElement>(null);
+
+	// Render 2D Viewer (D3.js)
+	useEffect(() => {
+		console.log(data);
+		if (!data || !selectedSection || !d3Ref.current) return;
+
+		const section = data.find((sec) => sec.sectionId === selectedSection);
+		if (!section) return;
+
+		const margin = { top: 20, right: 20, bottom: 40, left: 40 };
+		const width = 500 - margin.left - margin.right;
+		const height = 500 - margin.top - margin.bottom;
+
+		const svg = d3
+			.select(d3Ref.current)
+			.html("") // Clear previous content
+			.append("svg")
+			.attr("width", width + margin.left + margin.right)
+			.attr("height", height + margin.top + margin.bottom)
+			.append("g")
+			.attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+		const xScale = d3
+			.scaleLinear()
+			.domain([
+				d3.min(
+					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[0]))
+				),
+				d3.max(
+					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[0]))
+				),
+			])
+			.range([0, width]);
+
+		const yScale = d3
+			.scaleLinear()
+			.domain([
+				d3.min(
+					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[1]))
+				),
+				d3.max(
+					section.polygons.flatMap((p) => p.points2D.map((d) => d.vertex[1]))
+				),
+			])
+			.range([height, 0]);
+
+		const xAxis = d3.axisBottom(xScale);
+		const yAxis = d3.axisLeft(yScale);
+
+		svg.append("g").attr("transform", `translate(0, ${height})`).call(xAxis);
+		svg.append("g").call(yAxis);
+
+		section.polygons.forEach((polygon) => {
+			svg
+				.append("polygon")
+				.attr(
+					"points",
+					polygon.points2D
+						.map((p) => `${xScale(p.vertex[0])},${yScale(p.vertex[1])}`)
+						.join(" ")
+				)
+				.attr("fill", `#${polygon.color}`)
+				.attr("stroke", "black")
+				.attr("stroke-width", 1)
+				.on("click", function () {
+					d3.select(this).attr("stroke", "red");
+				});
+		});
+	}, [data, selectedSection]);
+
+	useEffect(() => {
+		if (!data || !threeRef.current) return;
+
+		const section = data.find((sec) => sec.sectionId === selectedSection);
+		if (!section) return;
+
+		// Scene setup
+		const scene = new THREE.Scene();
+		scene.background = new THREE.Color(0xffffff); // White background
+
+		// Camera setup (Position it for a top-right-down view)
+		const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 5000); // Adjust the far value
+		camera.position.set(100, 100, 100); // Position the camera at a good distance
+		camera.lookAt(0, 0, 0); // Look at the center of the scene
+
+		// Renderer setup
+		const renderer = new THREE.WebGLRenderer();
+		renderer.setSize(500, 500);
+		threeRef.current.innerHTML = ""; // Clear previous content
+		threeRef.current.appendChild(renderer.domElement);
+
+		// Orbit controls for camera interaction (disable panning)
+		const controls = new OrbitControls(camera, renderer.domElement);
+		controls.enableDamping = true; // Smooth damping for smoother movement
+		controls.dampingFactor = 0.25;
+		controls.screenSpacePanning = false; // Disable screen space panning
+		controls.maxPolarAngle = Math.PI / 2;
+		controls.enableZoom = true; // Enable zooming
+
+		// Movement variables
+		const moveSpeed = 2; // Speed of camera movement (you can adjust)
+		let moveForward = false;
+		let moveBackward = false;
+		let moveLeft = false;
+		let moveRight = false;
+
+		// Keyboard event listeners for WASD keys
+		function handleKeyDown(event) {
+			switch (event.key) {
+				case "w":
+					moveForward = true;
+					break;
+				case "s":
+					moveBackward = true;
+					break;
+				case "a":
+					moveLeft = true;
+					break;
+				case "d":
+					moveRight = true;
+					break;
+				default:
+					break;
+			}
+		}
+
+		function handleKeyUp(event) {
+			switch (event.key) {
+				case "w":
+					moveForward = false;
+					break;
+				case "s":
+					moveBackward = false;
+					break;
+				case "a":
+					moveLeft = false;
+					break;
+				case "d":
+					moveRight = false;
+					break;
+				default:
+					break;
+			}
+		}
+
+		// Add event listeners
+		window.addEventListener("keydown", handleKeyDown);
+		window.addEventListener("keyup", handleKeyUp);
+
+		section.polygons.forEach((polygon) => {
+			const vertices: number[] = []; // Array to store vertex positions
+			const indices: number[] = []; // Array to store face indices (triangles)
+
+			// Apply scaling factor to control the size of the objects
+			const scaleFactor = 0.2; // Adjust this factor as needed for proper scaling
+
+			polygon.points3D.forEach((point) => {
+				const [x, y, z] = point.vertex;
+				// Apply scaling to the x, y, z coordinates
+				vertices.push(x * scaleFactor, z * scaleFactor, y * scaleFactor);
+			});
+
+			// Create faces (triangles) based on the vertex positions
+			// Here we are assuming the polygon is made up of a triangle fan, you might need to adjust the logic based on your data
+			for (let i = 1; i < polygon.points3D.length - 1; i++) {
+				indices.push(0, i, i + 1); // Creates a triangle fan
+			}
+
+			const geometry = new THREE.BufferGeometry(); // Use BufferGeometry
+
+			// Add the vertices as a BufferAttribute (positions)
+			geometry.setAttribute(
+				"position",
+				new THREE.BufferAttribute(new Float32Array(vertices), 3) // 3 components per vertex
+			);
+
+			// Add the indices as a BufferAttribute (faces)
+			geometry.setIndex(indices);
+
+			// Use MeshBasicMaterial with DoubleSide for both front and back faces
+			const material = new THREE.MeshBasicMaterial({
+				color: `#${polygon.color}`,
+				side: THREE.DoubleSide, // Ensure both sides are rendered
+				wireframe: false, // Set to true if you want wireframe mode, false for solid fill
+			});
+
+			const mesh = new THREE.Mesh(geometry, material);
+			scene.add(mesh);
+		});
+
+		// Add a grid helper to the scene (for orientation)
+		const gridHelper = new THREE.GridHelper(5000, 100); // Adjust grid size
+		scene.add(gridHelper);
+
+		// Animation loop
+		function animate() {
+			requestAnimationFrame(animate);
+
+			// WASD movement logic
+			if (moveForward) camera.position.z -= moveSpeed;
+			if (moveBackward) camera.position.z += moveSpeed;
+			if (moveLeft) camera.position.x -= moveSpeed;
+			if (moveRight) camera.position.x += moveSpeed;
+
+			controls.update(); // Update the controls (important for damping)
+			renderer.render(scene, camera);
+		}
+		animate();
+
+		// Clean up when the component is unmounted
+		return () => {
+			renderer.dispose();
+			controls.dispose();
+			window.removeEventListener("keydown", handleKeyDown);
+			window.removeEventListener("keyup", handleKeyUp);
+		};
+	}, [data, selectedSection]);
+
+	return (
+		<>
+			<Title level={2}>Polygon Viewer</Title>
+			<Select
+				value={selectedSection}
+				onChange={setSelectedSection}
+				style={{ width: 200 }}
+			>
+				{data &&
+					data.map((section) => (
+						<Option key={section.sectionId} value={section.sectionId}>
+							{section.sectionName}
+						</Option>
+					))}
+			</Select>
+			<div>
+				<Title level={4}>2D Viewer (D3.js)</Title>
+				<div ref={d3Ref}></div>
+			</div>
+			<div>
+				<Title level={4}>3D Viewer (Three.js)</Title>
+				<div ref={threeRef}></div>
+			</div>
+		</>
+	);
+};
+
+export default HomeList;
