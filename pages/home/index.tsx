@@ -126,9 +126,11 @@ const HomeList = () => {
 		scene.background = new THREE.Color(0xffffff); // White background
 
 		// Camera setup (Position it for a top-right-down view)
-		const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 5000); // Adjust the far value
-		camera.position.set(100, 100, 100); // Position the camera at a good distance
-		camera.lookAt(0, 0, 0); // Look at the center of the scene
+		const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+		camera.position.set(100, 100, 100); // Initial camera position
+		let [sideX, sideY, sideZ] = section.polygons[0].points3D[0].vertex;
+		console.log(sideX, sideY, sideZ);
+		camera.lookAt(0, 0, 0); // Look at the center
 
 		// Renderer setup
 		const renderer = new THREE.WebGLRenderer();
@@ -194,12 +196,37 @@ const HomeList = () => {
 		window.addEventListener("keydown", handleKeyDown);
 		window.addEventListener("keyup", handleKeyUp);
 
+		// Determine the min and max values for x and z coordinates across all polygons
+		let minX = Infinity,
+			maxX = -Infinity,
+			minZ = Infinity,
+			maxZ = -Infinity;
+
+		section.polygons.forEach((polygon) => {
+			polygon.points3D.forEach((point) => {
+				const [x, , z] = point.vertex;
+				minX = Math.min(minX, x);
+				maxX = Math.max(maxX, x);
+				minZ = Math.min(minZ, z);
+				maxZ = Math.max(maxZ, z);
+			});
+		});
+
+		// Now create the grid helper based on min and max values
+		const gridSize = Math.max(maxX - minX, maxZ - minZ); // Choose the larger of the two ranges
+		const gridHelper = new THREE.GridHelper(gridSize, 50); // 50 divisions
+
+		// Rotate the grid to make it horizontal, on the floor (lying flat)
+		gridHelper.rotation.y = Math.PI / 2; // Rotate 90 degrees along the X-axis to make it horizontal
+		scene.add(gridHelper);
+
+		// Add polygons (as before)
 		section.polygons.forEach((polygon) => {
 			const vertices: number[] = []; // Array to store vertex positions
 			const indices: number[] = []; // Array to store face indices (triangles)
 
 			// Apply scaling factor to control the size of the objects
-			const scaleFactor = 0.2; // Adjust this factor as needed for proper scaling
+			const scaleFactor = 0.05; // Adjust this factor as needed for proper scaling
 
 			polygon.points3D.forEach((point) => {
 				const [x, y, z] = point.vertex;
@@ -234,10 +261,6 @@ const HomeList = () => {
 			const mesh = new THREE.Mesh(geometry, material);
 			scene.add(mesh);
 		});
-
-		// Add a grid helper to the scene (for orientation)
-		const gridHelper = new THREE.GridHelper(5000, 100); // Adjust grid size
-		scene.add(gridHelper);
 
 		// Animation loop
 		function animate() {
