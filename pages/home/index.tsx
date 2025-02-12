@@ -60,7 +60,6 @@ const HomeList = () => {
 
 	// Render 2D Viewer (D3.js)
 	useEffect(() => {
-		console.log(data);
 		if (!data || !selectedSection || !d3Ref.current) return;
 
 		const section = data.find((sec) => sec.sectionId === selectedSection);
@@ -75,7 +74,15 @@ const HomeList = () => {
 			.html("") // Clear previous content
 			.append("svg")
 			.attr("width", width + margin.left + margin.right)
-			.attr("height", height + margin.top + margin.bottom)
+			.attr("height", height + margin.top + margin.bottom);
+
+		// Create a group for the content that will be zoomed
+		const contentGroup = svg
+			.append("g")
+			.attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+		// Create a group for the axes (keep them fixed and outside the zoomable content group)
+		const axesGroup = svg
 			.append("g")
 			.attr("transform", `translate(${margin.left}, ${margin.top})`);
 
@@ -93,9 +100,34 @@ const HomeList = () => {
 			.scaleLinear()
 			.domain([d3.min(yValues) ?? 0, d3.max(yValues) ?? 0])
 			.range([height, 0]);
+
+		// Create axes
+		const xAxis = d3.axisBottom(xScale);
+		const yAxis = d3.axisLeft(yScale);
+
+		// Define zoom behavior
+		const zoom = d3
+			.zoom<SVGSVGElement, unknown>()
+			.scaleExtent([0.5, 5]) // Limit zoom scale
+			.on("zoom", (event) => {
+				// Apply zoom transform only to the content group
+				contentGroup.attr("transform", event.transform);
+
+				// Adjust scale ranges
+				xScale.range([0, width].map((d) => event.transform.applyX(d)));
+				yScale.range([height, 0].map((d) => event.transform.applyY(d)));
+
+				// Update axes positions
+				axesGroup.select<SVGGElement>(".x-axis").call(xAxis);
+				axesGroup.select<SVGGElement>(".y-axis").call(yAxis);
+			});
+
+		// Apply zoom behavior to the entire SVG (but will affect only the content)
+		svg.call(zoom);
+
 		// Render boreholes
 		section.boreholes.forEach((borehole) => {
-			svg
+			contentGroup
 				.append("circle")
 				.attr("cx", xScale(borehole.x))
 				.attr("cy", yScale(borehole.elevation)) // Use elevation for y-coordinate
@@ -105,23 +137,25 @@ const HomeList = () => {
 					d3.select(this).attr("fill", "blue"); // Change color on click
 				});
 
-			// Add label for the borehole
-			svg
+			contentGroup
 				.append("text")
 				.attr("x", xScale(borehole.x))
 				.attr("y", yScale(borehole.elevation) - 10) // Position text above the circle
 				.attr("text-anchor", "middle")
 				.text(borehole.name);
 		});
-		const xAxis = d3.axisBottom(xScale);
-		const yAxis = d3.axisLeft(yScale);
 
-		// Append x and y axis
-		svg.append("g").attr("transform", `translate(0, ${height})`).call(xAxis);
-		svg.append("g").call(yAxis);
+		// Append x and y axis (use the axesGroup to avoid zooming on them)
+		axesGroup
+			.append("g")
+			.attr("transform", `translate(0, ${height})`)
+			.call(xAxis)
+			.attr("class", "x-axis");
+
+		axesGroup.append("g").call(yAxis).attr("class", "y-axis");
 
 		// Add X-axis label
-		svg
+		axesGroup
 			.append("text")
 			.attr("x", width / 2)
 			.attr("y", height + margin.bottom - 10) // Position the text just below the x-axis
@@ -129,7 +163,7 @@ const HomeList = () => {
 			.text("X");
 
 		// Add Y-axis label
-		svg
+		axesGroup
 			.append("text")
 			.attr("transform", "rotate(-90)") // Rotate to make it vertical
 			.attr("x", -height / 2)
@@ -137,9 +171,9 @@ const HomeList = () => {
 			.style("text-anchor", "middle")
 			.text("Y");
 
-		// Render polygons
+		// Render polygons with event for selection
 		section.polygons.forEach((polygon) => {
-			svg
+			contentGroup
 				.append("polygon")
 				.attr(
 					"points",
@@ -151,7 +185,7 @@ const HomeList = () => {
 				.attr("stroke", "black")
 				.attr("stroke-width", 1)
 				.on("click", function () {
-					d3.select(this).attr("stroke", "red");
+					d3.select(this).attr("stroke", "red"); // Highlight polygon on click
 				});
 		});
 	}, [data, selectedSection]);
