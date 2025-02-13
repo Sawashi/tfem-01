@@ -124,12 +124,12 @@ const HomeList = () => {
 
 				// Update the transformed scales for the content group
 				contentGroup
-					.selectAll("circle")
+					.selectAll<SVGCircleElement, Borehole>("circle")
 					.attr("cx", (d) => newXScale(d.x))
 					.attr("cy", (d) => newYScale(d.elevation));
 
 				contentGroup
-					.selectAll("polygon")
+					.selectAll<SVGPolygonElement, Polygon>("polygon")
 					.attr("points", (d) =>
 						d.points2D
 							.map((p) => `${newXScale(p.vertex[0])},${newYScale(p.vertex[1])}`)
@@ -137,8 +137,8 @@ const HomeList = () => {
 					);
 
 				// Update axes' numbers but NOT their position
-				axesGroup.select(".x-axis").call(xAxis.scale(newXScale));
-				axesGroup.select(".y-axis").call(yAxis.scale(newYScale));
+				axesGroup.select<SVGGElement>(".x-axis").call(xAxis.scale(newXScale));
+				axesGroup.select<SVGGElement>(".y-axis").call(yAxis.scale(newYScale));
 			});
 
 		// Apply zoom to the entire SVG
